@@ -1,0 +1,15 @@
+# Pump photos, labels and the local database never go into git
+data/
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Trained models are large binary files. Only the one the app uses is kept
+# in git, through Git LFS (see .gitattributes).
+models/*
+!models/pump_rec_v1/
+
+# Secrets for the hosted setup (access code, domain)
+.env

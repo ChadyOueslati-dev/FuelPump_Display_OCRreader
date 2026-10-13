@@ -1,0 +1,35 @@
+# Hosted setup: the OCR server plus Caddy, which provides HTTPS with an
+# automatically issued certificate. NOT YET TESTED.
+#
+# Needs a .env file next to this one (never commit it):
+#   PUMP_OCR_ACCESS_CODE=a-long-random-secret
+#   PUMP_OCR_DOMAIN=scan.example.com      # must already point at this server
+#
+# Start:  docker compose up -d --build
+services:
+  ocr:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUMP_OCR_ACCESS_CODE: ${PUMP_OCR_ACCESS_CODE:?set PUMP_OCR_ACCESS_CODE in .env}
+    volumes:
+      - scans:/data
+    # Not published to the internet directly; only Caddy can reach it.
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${PUMP_OCR_DOMAIN:?set PUMP_OCR_DOMAIN in .env} --to ocr:8000
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - ocr
+
+volumes:
+  scans:
+  caddy_data:

@@ -1,0 +1,18 @@
+pump 01 gives incorrect price per liter
+reason: display reads 988.99 instead of coorect pricing of diesel due to gas pump display
+
+Solved.
+
+testing:
+pump0: passed
+pump1: passed 
+pump2: passed
+pump3: passed
+pump4: passed
+pump5: passed
+pump6: passed
+pump7: passed
+pump8: passed
+pump9: passed 
+pump10: passed 
+pump11: passed

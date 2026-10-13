@@ -1,0 +1,10 @@
+data/
+.git/
+.env
+tests/
+scripts/
+__pycache__/
+*.pyc
+.pytest_cache/
+Notes 4 Later
+DAILY_LOG.txt

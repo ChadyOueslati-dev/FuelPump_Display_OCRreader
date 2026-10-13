@@ -1,0 +1,387 @@
+DEVELOPMENT LOG - Pump Display OCR
+What was built each day. Newest day at the top.
+
+PROGRESS (8 steps in the plan)
+  [done] 1. Setup + raw OCR script
+  [done] 2. OCR check on photos (13 test photos, real ones still needed)
+  [done] 3. Parsing into total / liters / price per liter
+  [done] 4. Validation rules
+  [done] 5. Evaluation script
+  [    ] 6. Fraud checks (duplicate photo, GPS, edited values, stubs)
+  [    ] 7. API (POST /readings)
+  [    ] 8. Docker for Linux + final README
+
+============================================================
+2026-10-06 (Day 3)
+============================================================
+
+WHAT WE DID
+- Every scan is now stored: the picture as a file and the liters, time and
+  status in a small database. New history page at /scans.
+- Added an access code (login) so the server can be put on the internet.
+- Wrote the files for hosting on a Linux server (Dockerfile and
+  docker-compose.yml, with automatic HTTPS).
+
+- Set up Tailscale so the phone can scan from anywhere while the laptop
+  stays at home (https://yngx2.tail115b58.ts.net). Working.
+- Added a public mode (Tailscale Funnel) so someone else can scan with
+  just a link and the access code, plus a lockout after 10 wrong codes.
+
+- Switched OFF the Saudi fuel price rule for now (kept in the code, one
+  setting turns it back on: check_fuel_price in config\settings.yaml).
+  Liters is still checked against the total and the price per liter.
+  All 11 labelled photos now return the correct liters.
+
+- First real scan from the phone (a Euro pump photo: Sale 57.62,
+  Litres 33.899) was a retake. Three causes, all fixed:
+    * the screen was not found (bright LCD merged with its grey frame)
+    * the digits were drawn as thin outlines the OCR could not see; a new
+      image version thickens the strokes
+    * the display has only two rows (no price per liter), and the app
+      needed three
+- New status "review": for displays without a price per liter, liters is
+  returned but marked "not verified", because the arithmetic check is
+  impossible. That scan now returns 33.899 as review.
+- 108 automatic tests pass. The 11 labelled photos still all return the
+  correct liters.
+
+- Picture and value are now saved as one unit, and a new checker
+  (scripts\check_storage.py) lists everything stored and flags mismatches.
+- Personal access codes: each person gets their own code and every scan is
+  stored with their name. Created 4 users (user1 to user4).
+- Two real phone scans of two-row displays came back as review with the
+  correct liters (7.050 and 59.860), checked against their pictures.
+
+- Switched the 4 users to 5-digit PINs (easier to type). A PIN only
+  works together with the person's own name, and the lockout is stricter
+  (5 wrong tries, then 15 minutes).
+
+- Office trial went badly: the boss's 5 scans (European and US pump
+  pictures on a monitor) were all retakes. Found and fixed three causes:
+    * the screen finder picked the bright blue pump body instead of the
+      display; it now looks for white, not just bright
+    * European decimal commas (25,37) were not accepted as numbers
+    * a single good read was thrown away when a second check flaked
+  After the fixes 1 of those 5 reads; my own 3 phone scans all read.
+  The other 4 fail in the OCR itself (digit styles it cannot read).
+  No wrong value was returned for any of them.
+- The 13 test photos were deleted from data\ (they are in the Recycle Bin).
+
+- Layouts and labels: the app now uses the words next to the numbers
+  (SAR, L, LITER, SAR/L ...) to tell which number is which. The word lists
+  are parameters in config\labels.yaml. Handles rows in another order and
+  a price shown in a separate panel. Gallons displays are refused.
+- If the cropped display gives nothing, the whole photo is read as well.
+- The real Aramco pump photo (10.00 SAR / 4.59 L, price in a side panel)
+  now returns 4.59 as review. It is review, not accepted, because the OCR
+  read the price as 218 without its decimal point.
+- 149 automatic tests pass. 9 of 9 labelled test photos correct, 0 wrong.
+  Of the 11 stored phone scans: 1 accepted, 4 review, 6 retake.
+
+TESTED LATER THE SAME DAY
+- Windows Smart App Control had switched on and blocked the project's
+  Python and OpenCV. It was turned off, and everything runs again.
+- All 86 automatic tests pass.
+- Real run of the server: login works, scans are stored with picture and
+  liters, the history page lists them.
+- Still untested: the Docker files (Docker is not installed) and the
+  phone page on a real phone.
+
+TRAINING THE NUMBER READER ON THE GPU (started, not finished)
+- Measured baseline with the generator's labels, 140 large photos:
+  liters returned on 78 (56%), all checked ones correct, 0 wrong, 62 retake.
+- The app now finds the numbers by size and by label words, restores
+  dropped decimal points (as "review"), and has zoom on the phone page.
+- Ready on disk (C:\ocr-train, outside OneDrive):
+    * 31,500 generated training pictures     C:\ocr-train\data\synthetic
+    * pretrained weights (222 MB)            C:\ocr-train\pretrained
+    * PaddleOCR training code v3.7.0         C:\ocr-train\PaddleOCR
+    * 176 real crops from the 60 ads photos  C:\ocr-train\data\real_ads_pump
+- Not finished when the laptop was shut down:
+    * GPU build of PaddlePaddle into C:\venvs\pump-ocr-train (was still
+      downloading; run the install again, it reuses what was downloaded)
+    * real crops from the 80 car ads photos (run harvest_crops.py again)
+- Then: merge_lists.py, train, export, set the model in the app, and
+  rerun the 140 large photos. Steps are in scripts\train\README.md.
+
+TRAINING RESULTS SO FAR (evening of 2026-10-06)
+- GPU software installed; training runs on the RTX 3070 (about 2.5 hours
+  for 8 passes; batch 24, because 64 does not fit in 8 GB).
+- Training set: 30,000 generated pictures + 329 real crops from the ads
+  photos. The Large and Small folders are never trained on.
+- Early checkpoint (a third of the first pass), measured on the 140
+  labelled large photos, run on the GPU:
+      before training:  78 returned (56%), 0 wrong, 62 retake, 20 minutes
+      early checkpoint: 124 returned correctly (89%), 0 wrong, 16 retake,
+                        2 minutes
+- Lesson: an allowance I added for low-confidence readings let 2 wrong
+  liters values through (21.65 for 21.66; 7.33 for 7.38). A misread last
+  digit can still satisfy the arithmetic within 0.02 SAR. The allowance is
+  now off, and a second version that read a different liters value now
+  forces a retake.
+- The trained model is not switched on in the app yet (settings.yaml,
+  ocr section). Do that after the full training run is measured.
+
+TRAINING FINISHED (evening of 2026-10-06)
+- Full run: 8 passes, about 2.5 hours on the RTX 3070. Held-out accuracy of
+  the reader itself went from roughly 15% to 94.7%.
+- Final model, on photos never trained on:
+      Large (140): liters correct 123 (88%), wrong 0, accepted 115,
+                   review 8, retake 17. All 140 in about 1 minute.
+      Small (12):  12 accepted.
+      Stored phone scans (18): 10 return liters (was 7), including the real
+                   Aramco photo, now fully accepted.
+- The app now uses the trained model (models\pump_rec_v1) on the GPU.
+  A scan takes 0.2 to 0.5 s on the server instead of 2 to 15 s.
+- The app's environment (C:\venvs\pump-ocr) now has the GPU build of
+  PaddlePaddle. 185 automatic tests pass.
+- Still true: the test photos come from the same generator as the training
+  pictures. Real labelled pump photos are needed to know real accuracy.
+
+MORE TEST DATA (2026-10-08)
+- New script scripts\generate_test_photos.py makes fresh labelled photos
+  with the pump generator: 100 each for close-up, car window, close-up with
+  ads, car window with ads, in data\generated. Never trained on.
+- Result on those 400: liters correct 327 (82%), accepted 280, review 48,
+  retake 72, WRONG 1. By method: close-up 96%, car window 82%, close-up
+  with ads 78%, car window with ads 71%.
+- The 1 wrong value (15.15 for 15.16) was a "review" on a photo where the
+  price could not be read, so nothing could check the liters. Review means
+  unverified; this is what that looks like when it goes wrong.
+- Also learned: even with the price, the arithmetic cannot always catch a
+  last-digit slip in liters, because 0.01 L is worth less than the 0.02 SAR
+  tolerance. An accepted value is right to within about 0.01 L.
+- Internet: a first download (14 pictures in data\internet) was wrong: the
+  pictures were stations seen from far away, not displays. Deleted. See
+  "REAL DISPLAY PHOTOS" below for the second attempt.
+
+"WAS THIS RIGHT?" BUTTONS (2026-10-08)
+- After each scan the phone asks if the liters is right (Yes / No, and a
+  box to type the true value). After a retake it offers the box only.
+- Answers are stored with the scan and shown in the history.
+- scripts\export_feedback.py turns the answers into a labels file, and
+  evaluate.py now works with liters-only labels, so real scans can be
+  measured the same way as the generated photos.
+- Tested end to end on a local server; not yet tried on a phone.
+- 197 automatic tests pass.
+
+NEW SCAN SCREEN (2026-10-08)
+- The phone page was redesigned. The camera now fills the whole screen,
+  the box sits in the middle and the Scan button is fixed at the bottom,
+  so nothing has to be scrolled (the old page needed scrolling on an
+  iPhone 16 Pro Max). The result slides up above the button. Pinch or
+  slider to zoom. History page restyled to match.
+- Checked in a desktop browser at iPhone 16 Pro Max and iPhone SE sizes:
+  no scrolling, button always on screen, the picture sent is exactly the
+  box. NOT yet tried on a real iPhone.
+
+REAL DISPLAY PHOTOS FROM THE INTERNET (2026-10-08)
+- New script scripts\find_display_photos.py searches Openverse (Flickr and
+  others) and Wikimedia Commons for freely licensed pictures. Every picture
+  kept was looked at: it must show a pump display with the liters pumped.
+- Saved in data\internet_displays, in two folders by licence:
+      commercial_ok   licences that allow any use with credit
+      testing_only    non-commercial / no-changes licences: fine for
+                      testing here, must not go into a product
+  Each folder has sources.csv (page, licence, author). labels.csv holds the
+  liters read by eye.
+- Includes Gulf displays with Arabic labels (Saudi, Kuwait, Bahrain, UAE)
+  and Morocco, plus Europe, India and Australia.
+- 26 pictures, 23 with a label (3 show two displays at once).
+- FIRST RESULT ON REAL PHOTOS: 23 labelled pictures, liters correct on 6,
+  wrong on 0, retake on 17. The reader was trained on generated pictures
+  and real displays look different (faint LCD digits, glare, angles).
+  No wrong value was returned, but real photos need real training data.
+
+MORE SAUDI-ONLY RULES SWITCHED OFF (2026-10-08, afternoon)
+- A phone scan of a Kuwaiti display (12.975 / 49.91 L) was read correctly
+  but thrown away: the total had 3 decimals and total / liters was not a
+  Saudi price. Both rules are now loose in config\settings.yaml
+  (amount_decimals, two_row_min_price, two_row_max_price), like the Saudi
+  price list before them. A hazy third number no longer blocks a two-row
+  reading either.
+- After the change: real internet photos 8 of 23 correct (was 6), Large
+  set 129 of 140 (was 123), generated 400: 337 (was 327). Wrong values:
+  still only the one known case (15.15 for 15.16).
+- All three Saudi rules must be switched back on before real use.
+- Most real photos still fail because the reader cannot make out the
+  digits. That needs training on real photos, not rule changes.
+
+SCANNING WITHOUT SIGN-IN (2026-10-08)
+- New option --no-login: anyone with the address can scan, no name or PIN.
+  The history page and stored pictures still need a name and PIN.
+- 199 automatic tests pass.
+
+ARABIC (2026-10-08)
+- Scan page: a button (ع / EN) switches all messages between Arabic and
+  English. Arabic is right to left. Checked in a desktop browser at iPhone
+  16 Pro Max size; not yet on a real phone. History page is English only.
+- Arabic pump words added to config\labels.yaml, but NOT ACTIVE: the
+  reader cannot read Arabic letters at all (its alphabet has none).
+- Tried PaddleOCR's Arabic reader on 6 Gulf photos: it read some Arabic
+  labels right (الكمية باللتر, اللترات) and garbled others. On every one of
+  those photos the English label beside it was read more reliably, so the
+  Arabic reader was not added. It would matter only for Arabic-only pumps.
+- 200 automatic tests pass.
+
+PHONE SCANS OF PICTURES ON A LAPTOP SCREEN (2026-10-08)
+- 13 scans today, all of internet pictures shown on the laptop screen.
+  After today's fixes 5 return the right liters, 8 are retakes, 0 wrong.
+- Fixed: the second read of the liters row failed when the number and the
+  word beside it were read as one piece ("50,960LITRE").
+- Not fixable by rules: the reader misreads real LCD digits, sometimes with
+  high confidence (57.68 read as 57.66 and 57.60). Returning liters without
+  the check would have returned those wrong values.
+- A screen photographed by a phone adds glare spots and blur a real pump
+  does not have, so this test is harder than real use.
+
+THE REAL CAUSE OF THE CLOSE-UP FAILURES (2026-10-09)
+- Planned to retrain the number reader. Before training, cut 362 text
+  crops out of the real photos and scans and checked them by eye. The
+  reader got about 9 in 10 real numbers right. It was not the main problem,
+  and yesterday's note blaming it was wrong.
+- The real cause: when the digits are very tall in the picture (a close-up,
+  which is what the zoom and the framing box encourage), the step that
+  FINDS the text cuts each row of digits into a top half and a bottom half,
+  or finds nothing. The same picture shrunk reads perfectly: display_0305
+  gives nothing at 960 px and "4000.00 / 57.68" at 0.99 at 480 px or less.
+- Fix: a picture that gives no reading is read again at smaller sizes
+  (settings.yaml: extra_ocr_sides, extra_whole_photo_sides). No training.
+- Result, liters correct (before -> after):
+      phone scans of 2026-10-08 (13):   5 ->  8
+      real internet photos (23):        8 -> 10
+      Large (140):                    129 -> 134
+      generated close / car:           97 -> 99,  84 -> 87
+      generated with ads:              79 -> 86,  77 -> 80
+- WRONG VALUES: one new one. A phone scan with a glare spot on the last
+  digit returns 57.60 for 57.68 as "not verified". The display has no price
+  row, so nothing can check it, and every re-read gives the same 57.60.
+  With the Saudi price range switched back on it would be refused. The old
+  known case (15.15 for 15.16) is unchanged.
+- A second new wrong value appeared during the work (an advert's "5.00"
+  taken for the liters at the small size) and was fixed: a two-row result
+  is refused if another size saw a different number under the same total.
+- Training was not run. It can still help the last 1 in 10 (glare, widely
+  spaced digits) once there are real pump scans to train and test on.
+- 203 automatic tests pass.
+
+ARAMCO DISPLAY LAYOUT (2026-10-11)
+- A scan of an Aramco display (30.00 SAR, 13.76 L, 2.18 SAR/L in a small
+  box beside the liters) was a retake although both big numbers were read
+  right every time. Causes and fixes:
+    * The phone number under the display (920012615) was taken for a row of
+      the readout. Digits without a decimal point now count as a number only
+      up to 6 digits.
+    * The small "SAR/L" under the price box was attached to the liters next
+      to it. A price label now goes to the number it is closest to.
+    * A "SAR/L" from the grade list (GAS 91 2.18 SAR/L) was attached to the
+      total on the same line. A label with its own number right beside it
+      now stays with that number.
+    * The same price shown twice (grade list and selected grade) counted as
+      two candidates. It is one price.
+    * New safeguard: liters x price = total also holds with the two swapped.
+      If the "liters" is exactly a price from fuel_prices.yaml and the
+      "price" is not, they are swapped back.
+- That scan now returns 13.76, accepted. Today's 6 scans: 4 right (was 3),
+  2 retakes, 0 wrong. No change on the other test sets except close-up
+  with ads 86 -> 87. 205 automatic tests pass.
+
+TO DO NEXT
+- Scan real pumps in Riyadh and answer the question each time; then run
+  export_feedback.py and evaluate.py to get the real accuracy.
+- Look at the 17 remaining retakes (15 are car-window shots).
+- Decide where to host (server inside Saudi Arabia recommended).
+- Get a server and a domain name, then deploy and test the Docker setup.
+
+============================================================
+2026-10-05 (Day 2)
+============================================================
+
+WHAT WE DID
+- Switched the focus to LITERS ONLY. The app now returns just the liters
+  value (phone, terminal and server response).
+- The total and price per liter are still read in the background, only to
+  check the liters value (liters x price per liter = total). Without that
+  check, wrong liters values could be accepted.
+- New rule: liters must have 2 or 3 decimals.
+- New check: after a reading passes, the liters row is cut out and read a
+  second time on its own. Both reads must agree, otherwise retake.
+- Evaluation script now leads with liters: how often liters is right, and
+  how many WRONG liters values were returned.
+- 80 automatic tests. All pass.
+
+RESULTS
+- 11 labelled photos: liters returned correctly on 10, WRONG liters: 0.
+- The 1 retake is still pump_0001 (price 1.99 not in the price list).
+- Scan time went from about 1.5 s to about 3 s because of the second liters
+  read. Can be switched off with confirm_liters_row in config\settings.yaml.
+
+TO DO NEXT
+- Real pump photos + labels.csv to measure liters accuracy for real.
+- Decide what POST /readings returns (it was amount, volume, price).
+- Fraud checks, API, Docker (steps 6 to 8).
+
+============================================================
+2026-10-04 (Day 1)
+============================================================
+
+WHAT WE DID
+- Set up Python 3.11 and PaddleOCR on Windows.
+- Built a script that reads a pump photo and prints the three values:
+  Price (SAR), Liters, Price per liter.
+- The app now crops the photo to the screen before reading it.
+  Works for LCD screens and LED screens (red / green digits).
+- Fixed the "988.99" problem: faint unlit segments on LCD screens were
+  being read as digits. The app now reads each photo 3 ways and combines
+  the results.
+- Added the validation rules:
+    * total has 2 decimals
+    * price per liter must be in the price list (2.18, 2.33, 1.79)
+    * liters x price per liter must match the total (within 0.02 SAR)
+    * liters between 1 and 150
+- Added a confidence rule: every value must be at least 0.95 confident,
+  otherwise the result is "retake".
+- Built an evaluation script that scores the app against a labels.csv.
+- Built a phone scan server: open a page on the phone, take a photo of
+  the pump, the result shows on the phone and in the PC terminal.
+  (Development only: no login, no fraud checks yet.)
+- Added a region of interest to the phone page: live camera with a green
+  box, only the box is sent. Not yet tried on a real phone.
+- Added a scan timer on the phone and in the terminal.
+- Made scanning much faster: about 1.5 s per photo instead of 9 s or more
+  (tens of seconds on large photos). The app now stops at the first good
+  read, shrinks the screen crop before reading, and uses a faster CPU mode
+  (needed PaddlePaddle 3.2.2 instead of 3.3.1).
+- Phone page now freezes the picture on tap, so the phone can be lowered
+  right away.
+- Wrote 67 automatic tests. All pass.
+
+RESULTS SO FAR
+- 13 test photos: 11 accepted, 2 retake.
+- No wrong value accepted on the 10 photos checked by eye.
+- image.png: retake, confidence too low (0.908). Photo is very small.
+- pump_0001.jpg: retake, price 1.99 is not in the price list.
+
+HOW TO RUN
+- One photo:
+    C:\venvs\pump-ocr\Scripts\python.exe scripts\ocr_one.py data\image.png
+- Scan from phone:
+    C:\venvs\pump-ocr\Scripts\python.exe scripts\phone_scan.py
+- Score against labels:
+    C:\venvs\pump-ocr\Scripts\python.exe scripts\evaluate.py data\labels.csv
+- Tests:
+    C:\venvs\pump-ocr\Scripts\python.exe -m pytest
+
+TO DO NEXT
+- Collect real pump photos and write labels.csv (filename, amount,
+  volume, price).
+- Decide if 1.99 is a real price. If yes, add it to
+  config\fuel_prices.yaml.
+- Build the fraud checks (duplicate photo, GPS, edited values).
+- Build the API (POST /readings).
+- Docker setup for Linux.
+
+OPEN QUESTIONS
+- Project is inside OneDrive, so photos in data\ sync to Microsoft's
+  cloud. Move the project before adding real photos?
+- Is the diesel price 1.79 current?

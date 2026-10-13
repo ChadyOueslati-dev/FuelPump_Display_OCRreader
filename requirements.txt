@@ -1,0 +1,13 @@
+# Verified together on Windows 11 + Python 3.11.17 (CPU only).
+# CPU build. On a PC with an NVIDIA card, install the GPU build instead and set
+# ocr.device to gpu in config/settings.yaml:
+#   uv pip install paddlepaddle-gpu==3.2.2 --index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
+paddlepaddle==3.2.2  # not 3.3.1: its oneDNN backend crashes, see app/ocr/engine.py
+paddleocr==3.7.0
+pyyaml==6.0.2
+fastapi==0.142.2
+uvicorn==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1
+cryptography==50.0.2
+pytest==9.1.1

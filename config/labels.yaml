@@ -1,0 +1,34 @@
+# Words printed next to the numbers on a pump display. They tell the app
+# which number is which when the layout is not the usual three rows.
+#
+# Matching ignores capitals, spaces and punctuation (except / $ €), and the
+# whole word must match: "L" matches a lone "L", not the L in "TOTAL".
+# A label is only used when it clearly belongs to exactly one number.
+# Add the words used on the pumps you scan.
+#
+# ARABIC WORDS ARE LISTED BUT NOT ACTIVE YET. The reader's alphabet has
+# digits and Latin letters only, so it cannot produce an Arabic word to
+# match. They take effect once an Arabic reader is added. Spelling
+# differences are ignored: stretched letters (اللـــتر), vowel marks, and
+# أ / إ / آ for ا, ة for ه, ى for ي.
+
+# The total to pay.
+amount: [SAR, SR, RIYAL, EURO, EUR, "€", "$", TOTAL, SALE, AMOUNT, BETRAG, PURCHASE, P,
+         المبلغ, مبلغ, القيمة, قيمة, قيمة المبيع, قيمة البيع, المبيع, الإجمالي, إجمالي, المجموع]
+# Not listed on purpose: ريال. Saudi pumps print it under the total and
+# under the price per liter, so it does not say which row is which.
+
+# The volume in liters. This is the value the app returns.
+liters: [L, LTR, LTRS, LITER, LITERS, LITRE, LITRES, VOLUME, ABGABE,
+         الكمية, كمية, الكمية باللتر, عدد اللترات, اللترات, لترات, الحجم]
+# Not listed on purpose: لتر and اللتر alone. They are also the last word
+# of "price per liter" (سعر اللتر); if only that half were read, the price
+# would be taken for the liters, and the arithmetic cannot tell them apart.
+
+# The price per liter.
+price: [SAR/L, SR/L, "€/L", "$/L", PRICE, PRICE/L, PRICE PER LITER, PREIS JE LITER, UNIT PRICE,
+        سعر اللتر, سعر الليتر, ثمن اللتر, السعر, سعر, سعر الوحدة, ريال/لتر]
+
+# If any word on the display starts with one of these, the display is in
+# gallons and the scan is refused, because its number is not liters.
+gallons_prefixes: [GAL]

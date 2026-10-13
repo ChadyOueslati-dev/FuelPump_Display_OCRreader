@@ -1,0 +1,7 @@
+# Fuel prices in SAR per liter. A reading is only accepted if its unit price
+# equals one of these exactly. Quote the numbers so they stay exact decimals.
+grades:
+  "91": "2.18"
+  "95": "2.33"
+  diesel: "1.79"
+  # "98": "?.??"   # changes monthly: add the current price here

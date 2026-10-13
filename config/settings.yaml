@@ -1,0 +1,84 @@
+ocr:
+  # "cpu", or "gpu" to run the OCR on the graphics card. "gpu" needs the GPU
+  # build of PaddlePaddle in the environment the app runs in, and an NVIDIA
+  # card. With "gpu" a scan takes well under a second instead of several.
+  device: gpu
+  # Folder of a recognition model fine-tuned on pump digits (see
+  # scripts/train/README.md). A relative path is relative to the project
+  # folder. Empty: PaddleOCR's stock model.
+  recognition_model_dir: models/pump_rec_v1
+  recognition_model_name: PP-OCRv6_medium_rec
+
+pipeline:
+  # The cropped display is shrunk so its longest side is at most this many
+  # pixels before OCR. OCR time grows with the pixel count (about 1.5 s per
+  # read at 400 px, 10 s at 960 px on CPU) and bigger did not read better.
+  ocr_max_side: 480
+  # If that gives no reading, the display is read again at these sizes.
+  # Smaller sizes are for close-ups: digits that are very tall in the
+  # picture are not found (each row is cut into a top and a bottom half),
+  # and the same picture shrunk reads perfectly.
+  extra_ocr_sides: [280]
+  # If nothing can be read from the cropped display (the crop can be the
+  # wrong area, or the pump can have several separate panels), read the
+  # whole photo as well, at up to this size. Slower: several seconds more
+  # on scans that would otherwise be a retake.
+  whole_photo_fallback: true
+  whole_photo_max_side: 960
+  extra_whole_photo_sides: [480, 280]
+  # The OCR often misses the small decimal point of a pump number and reads
+  # "10841" for "108.41". With this on, a number read without a point is
+  # given its usual decimals: 2 for the total and the price per liter, and
+  # inferred_liters_decimals for the liters. Such a result is never
+  # "accepted": it is returned as "review" with the flag
+  # decimal_point_inferred, and only if the arithmetic (or, with no price
+  # shown, the plausible-price check) still holds.
+  infer_decimal_points: true
+  inferred_liters_decimals: 2
+  # Each photo can be read up to three times (original, faded, binary).
+  # true:  stop at the first read that gives a valid, confident result (fast).
+  # false: always do all three and retake if they produce two different
+  #        valid results (about 3x slower, slightly stricter).
+  stop_at_first_valid: true
+  # After a reading passes validation, cut out just the liters row and read
+  # it again on its own. The second read must find the same liters value,
+  # otherwise retake. Adds about 0.4 to 1.2 s per scan.
+  confirm_liters_row: true
+  # Some pumps show only the total and the liters, with no price per liter.
+  # Liters then cannot be checked by arithmetic. With this on, such a display
+  # returns liters with status "review" (read, but not verified) when at
+  # least two image versions read the same two numbers. With it off, such a
+  # display is always a retake.
+  allow_two_row_displays: true
+  # On a two-row display, total / liters must fall in this range. It catches
+  # the two numbers being the wrong rows (e.g. liters and price per liter).
+  # WIDE FOR NOW so pumps in any currency can be scanned (Kuwait is about
+  # 0.1 per liter, India about 100). For Saudi pumps only, use 0.5 and 5.
+  two_row_min_price: "0.05"
+  two_row_max_price: "150"
+
+validation:
+  # Saudi price rule: the price per liter must equal a grade in
+  # fuel_prices.yaml. SWITCHED OFF FOR NOW so pumps with any price can be
+  # scanned. Set back to true to enforce Saudi prices again.
+  check_fuel_price: false
+  # Largest allowed difference between volume * price and the amount shown.
+  amount_tolerance_sar: "0.02"
+  min_volume_l: "1"
+  max_volume_l: "150"
+  # Number of decimals the total may have. Saudi pumps show 2 (riyal and
+  # halala). 3 IS ALLOWED FOR NOW so pumps in other currencies can be
+  # scanned (Kuwait, Bahrain). For Saudi pumps only, use [2].
+  amount_decimals: [2, 3]
+  # Number of decimals the liters value may have (depends on the pump).
+  volume_decimals: [2, 3]
+  # Every one of the three values must be read with at least this OCR
+  # confidence (0 to 1), otherwise the result is a retake.
+  min_confidence: 0.90
+  # Optional allowance: a reading whose arithmetic holds but whose confidence
+  # is below min_confidence can be returned as "review" (flag low_confidence)
+  # if it is at least this confident. OFF (null) on purpose: measured on 140
+  # labelled photos with 0.60 here, it let 2 wrong liters values through.
+  # A misread last digit can still satisfy the arithmetic within 0.02 SAR
+  # (21.65 for 21.66), and low confidence was the only warning sign.
+  review_confidence: null
